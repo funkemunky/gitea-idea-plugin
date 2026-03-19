@@ -21,7 +21,6 @@ import com.intellij.openapi.util.NlsContexts.NotificationTitle
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.openapi.util.text.StringUtil
-import com.intellij.openapi.vcs.VcsNotifier
 import org.jetbrains.annotations.NonNls
 import org.jetbrains.annotations.NotNull
 import org.jetbrains.annotations.Nullable
@@ -30,6 +29,28 @@ import java.net.UnknownHostException
 
 object GiteaNotifications {
     private val LOG: Logger = thisLogger()
+    private const val NOTIFICATION_GROUP_ID = "Gitea Notifications"
+
+    private fun notify(
+        project: Project?,
+        displayId: String?,
+        title: String,
+        message: String,
+        type: NotificationType,
+        listener: NotificationListener? = null
+    ) {
+        val notification = NotificationGroupManager.getInstance()
+            .getNotificationGroup(NOTIFICATION_GROUP_ID)
+            .createNotification(title, message, type)
+        if (displayId != null) {
+            notification.setDisplayId(displayId)
+        }
+
+        if (listener != null) {
+            notification.setListener(listener)
+        }
+        notification.notify(project)
+    }
 
     private fun isOperationCanceled(@NotNull e: Throwable?): Boolean {
         return e is GiteaOperationCanceledException || e is ProcessCanceledException
@@ -42,7 +63,7 @@ object GiteaNotifications {
         @NotNull message: @NotificationContent String?
     ) {
         LOG.info("$title; $message")
-        VcsNotifier.getInstance(project!!).notifyImportantInfo(displayId, title!!, message!!)
+        notify(project, displayId, title!!, message!!, NotificationType.INFORMATION)
     }
 
     fun showWarning(
@@ -52,7 +73,7 @@ object GiteaNotifications {
         @NotNull message: @NotificationContent String?
     ) {
         LOG.info("$title; $message")
-        VcsNotifier.getInstance(project!!).notifyImportantWarning(displayId, title!!, message!!)
+        notify(project, displayId, title!!, message!!, NotificationType.WARNING)
     }
 
     fun showError(
@@ -62,7 +83,7 @@ object GiteaNotifications {
         @NotNull message: @NotificationContent String?
     ) {
         LOG.info("$title; $message")
-        VcsNotifier.getInstance(project!!).notifyError(displayId, title!!, message!!)
+        notify(project, displayId, title!!, message!!, NotificationType.ERROR)
     }
 
     fun showError(
@@ -73,7 +94,7 @@ object GiteaNotifications {
         @NotNull logDetails: String
     ) {
         LOG.warn("$title; $message; $logDetails")
-        VcsNotifier.getInstance(project!!).notifyError(displayId, title!!, message!!)
+        notify(project, displayId, title!!, message!!, NotificationType.ERROR)
     }
 
     fun showError(
@@ -84,7 +105,7 @@ object GiteaNotifications {
     ) {
         LOG.warn("$title; ", e)
         if (isOperationCanceled(e)) return
-        VcsNotifier.getInstance(project!!).notifyError(displayId, title, getErrorTextFromException(e))
+        notify(project, displayId, title, getErrorTextFromException(e), NotificationType.ERROR)
     }
 
     @NlsSafe
@@ -103,8 +124,13 @@ object GiteaNotifications {
         @NotNull url: String
     ) {
         LOG.info("$title; $message; $url")
-        VcsNotifier.getInstance(project!!).notifyImportantInfo(
-            displayId, title!!, HtmlChunk.link(url, message!!).toString(), NotificationListener.URL_OPENING_LISTENER
+        notify(
+            project,
+            displayId,
+            title!!,
+            HtmlChunk.link(url, message!!).toString(),
+            NotificationType.INFORMATION,
+            NotificationListener.URL_OPENING_LISTENER
         )
     }
 
@@ -118,10 +144,12 @@ object GiteaNotifications {
         @NotNull url: String
     ) {
         LOG.info("$title; $prefix$highlight$postfix; $url")
-        VcsNotifier.getInstance(project!!).notifyImportantWarning(
+        notify(
+            project,
             displayId,
             title!!,
             "$prefix<a href='$url'>$highlight</a>$postfix",
+            NotificationType.WARNING,
             NotificationListener.URL_OPENING_LISTENER
         )
     }
@@ -136,10 +164,12 @@ object GiteaNotifications {
         @NotNull url: String
     ) {
         LOG.info("$title; $prefix$highlight$postfix; $url")
-        VcsNotifier.getInstance(project!!).notifyError(
+        notify(
+            project,
             displayId,
             title!!,
             "$prefix<a href='$url'>$highlight</a>$postfix",
+            NotificationType.ERROR,
             NotificationListener.URL_OPENING_LISTENER
         )
     }

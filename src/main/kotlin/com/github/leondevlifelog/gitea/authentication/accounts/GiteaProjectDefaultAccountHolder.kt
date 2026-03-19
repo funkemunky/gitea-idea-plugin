@@ -5,13 +5,12 @@
 package com.github.leondevlifelog.gitea.authentication.accounts
 
 import com.github.leondevlifelog.gitea.GiteaBundle
+import com.github.leondevlifelog.gitea.util.GiteaNotifications
 import com.github.leondevlifelog.gitea.util.GiteaNotificationIdsHolder
-import com.intellij.collaboration.auth.PersistentDefaultAccountHolder
-import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.*
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vcs.VcsNotifier
+import com.intellij.collaboration.auth.PersistentDefaultAccountHolder
 import kotlinx.coroutines.CoroutineScope
 
 @State(name = "GiteaDefaultAccount", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)], reportStatistic = false)
@@ -22,10 +21,11 @@ class GiteaProjectDefaultAccountHolder(project: Project, scope: CoroutineScope) 
     override fun accountManager() = service<GiteaAccountManager>()
 
     override fun notifyDefaultAccountMissing() = runInEdt {
-        val title = GiteaBundle.message("accounts.default.missing")
-        VcsNotifier.IMPORTANT_ERROR_NOTIFICATION.createNotification(title, NotificationType.WARNING)
-            .setDisplayId(GiteaNotificationIdsHolder.MISSING_DEFAULT_ACCOUNT)
-//            .addAction(GiteaNotifications.getConfigureAction(project))
-            .notify(project)
+        GiteaNotifications.showWarning(
+            project,
+            GiteaNotificationIdsHolder.MISSING_DEFAULT_ACCOUNT,
+            GiteaBundle.message("accounts.default.missing"),
+            GiteaBundle.message("accounts.default.missing")
+        )
     }
 }

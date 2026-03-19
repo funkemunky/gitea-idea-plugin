@@ -15,6 +15,7 @@ New feature coming soon:
     <depends>com.intellij.tasks</depends>
     <depends>Git4Idea</depends>
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Gitea Notifications" displayType="BALLOON" isLogByDefault="true" />
         <tasks.repositoryType implementation="com.github.leondevlifelog.gitea.tasks.GiteaRepositoryType" />
         <toolWindow icon="com.github.leondevlifelog.gitea.icons.GiteaIcons.Gitea" doNotActivateOnStart="true"
             factoryClass="com.github.leondevlifelog.gitea.ui.GiteaToolWindowFactory" id="Gitea" />
