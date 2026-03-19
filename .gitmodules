@@ -1,0 +1,3 @@
+[submodule "tea4j-autodeploy"]
+	path = tea4j-autodeploy
+	url = https://github.com/funkemunky/tea4j-autodeploy.git

@@ -21,14 +21,13 @@ kotlin {
 
 // Configure project's dependencies
 repositories {
-   maven {
-       url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
-   }
     maven {
-        url = uri("https://jitpack.io")
+       url = uri("https://nexus.funkemunky.cc/repository/maven-central/")
+    }
+    maven {
+        url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
     }
     mavenCentral()
-
     // IntelliJ Platform Gradle Plugin Repositories Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-repositories-extension.html
     intellijPlatform {
         defaultRepositories()
@@ -38,7 +37,7 @@ repositories {
 // Dependencies are managed with Gradle version catalog - read more: https://docs.gradle.org/current/userguide/platforms.html#sub:version-catalog
 dependencies {
     testImplementation(libs.junit)
-    implementation("org.codeberg.gitnex:tea4j-autodeploy:0be0b407b2")
+    implementation("org.gitnex:tea4j-autodeploy:1.0.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")

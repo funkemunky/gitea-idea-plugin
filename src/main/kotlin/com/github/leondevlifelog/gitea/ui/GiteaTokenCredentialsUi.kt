@@ -23,6 +23,7 @@ import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.layout.ComponentPredicate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import java.net.UnknownHostException
 import javax.swing.JComponent
 import javax.swing.JTextField
@@ -80,10 +81,17 @@ internal class GiteaTokenCredentialsUi(
         ): String {
             val details = withContext(Dispatchers.IO) {
                 val service = service<GiteaSettings>()
-                service.getGiteaApi(server.toString(), token).getUserApi().userGetCurrent().execute().body()
+                val response = service.getGiteaApi(server.toString(), token).getUserApi().userGetCurrent().execute()
+                if (!response.isSuccessful) {
+                    throw GiteaAuthenticationException("Token is invalid (${response.code()} ${response.message()})")
+                }
+                response.body()
             } ?: throw GiteaAuthenticationException("Token is invalid")
-            if (!isAccountUnique(details.login, server)) throw LoginNotUniqueException(details.login)
-            return details.login
+            val login = details.login?.takeIf { it.isNotBlank() }
+                ?: details.loginName?.takeIf { it.isNotBlank() && !it.equals("empty", ignoreCase = true) }
+                ?: throw GiteaAuthenticationException("User login is missing in API response")
+            if (!isAccountUnique(login, server)) throw LoginNotUniqueException(login)
+            return login
         }
 
         fun handleError(error: Throwable): ValidationInfo = when (error) {

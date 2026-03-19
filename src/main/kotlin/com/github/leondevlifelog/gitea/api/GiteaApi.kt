@@ -59,4 +59,8 @@ class GiteaApi {
     fun getRepoApi(): RepositoryApi {
         return retrofit.create(RepositoryApi::class.java)
     }
+
+    fun getPullRequestApi(): GiteaPullRequestApi {
+        return retrofit.create(GiteaPullRequestApi::class.java)
+    }
 }
