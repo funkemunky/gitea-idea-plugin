@@ -211,7 +211,15 @@ class GiteaPullRequestsPanel(private val project: Project) : JPanel(BorderLayout
         list.cellRenderer = PullRequestRenderer()
         list.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
-                if (e.clickCount == 2) {
+                if (e.button == MouseEvent.BUTTON1 && e.clickCount == 1) {
+                    val row = list.locationToIndex(e.point)
+                    if (row >= 0) {
+                        list.selectedIndex = row
+                        list.selectedValue?.let { openPullRequestDetails(it) }
+                    }
+                    return
+                }
+                if (e.button == MouseEvent.BUTTON1 && e.clickCount == 2) {
                     list.selectedValue?.htmlUrl?.takeIf { it.isNotBlank() }?.let(BrowserUtil::browse)
                 }
             }
@@ -224,6 +232,23 @@ class GiteaPullRequestsPanel(private val project: Project) : JPanel(BorderLayout
                 maybeShowPopup(list, e)
             }
         })
+    }
+
+    private fun openPullRequestDetails(pullRequest: PullRequest) {
+        val context = repositoryCombo.selectedItem as? GiteaPullRequestRepositoryContext ?: return
+        val details = detailsCache[context.gitRepository.root.path]
+        if (details == null) {
+            refreshPullRequests(forceReloadDetails = true)
+            return
+        }
+
+        GiteaPullRequestDetailsDialog(
+            context = context,
+            repositoryDetails = details,
+            initialPullRequest = pullRequest,
+            service = service,
+            onPullRequestUpdated = { refreshPullRequests(forceReloadDetails = false) }
+        ).show()
     }
 
     private fun maybeShowPopup(list: JBList<PullRequest>, event: MouseEvent) {

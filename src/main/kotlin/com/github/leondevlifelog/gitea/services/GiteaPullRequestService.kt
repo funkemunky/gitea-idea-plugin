@@ -19,16 +19,26 @@ import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 import kotlinx.coroutines.runBlocking
 import org.gitnex.tea4j.v2.models.Branch
+import org.gitnex.tea4j.v2.models.ChangedFile
+import org.gitnex.tea4j.v2.models.Comment
+import org.gitnex.tea4j.v2.models.Commit
 import org.gitnex.tea4j.v2.models.CreatePullRequestOption
+import org.gitnex.tea4j.v2.models.CreatePullReviewOptions
 import org.gitnex.tea4j.v2.models.EditPullRequestOption
+import org.gitnex.tea4j.v2.models.Issue
 import org.gitnex.tea4j.v2.models.Label
+import org.gitnex.tea4j.v2.models.MergePullRequestOption
 import org.gitnex.tea4j.v2.models.Milestone
 import org.gitnex.tea4j.v2.models.PullRequest
+import org.gitnex.tea4j.v2.models.PullReview
+import org.gitnex.tea4j.v2.models.PullReviewRequestOptions
 import org.gitnex.tea4j.v2.models.Repository
 import org.gitnex.tea4j.v2.models.Team
+import org.gitnex.tea4j.v2.models.TimelineComment
 import org.gitnex.tea4j.v2.models.User
 import retrofit2.Call
 import retrofit2.Response
+import org.gitnex.tea4j.v2.models.CreateIssueCommentOption
 
 @Service(Service.Level.PROJECT)
 class GiteaPullRequestService(private val project: Project) {
@@ -129,6 +139,130 @@ class GiteaPullRequestService(private val project: Project) {
         return execute(api.getRepoApi().repoEditPullRequest(owner, repo, index, request))
     }
 
+    fun getPullRequestDetails(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long
+    ): GiteaPullRequestFullDetails {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+
+        val pullRequest = execute(api.getRepoApi().repoGetPullRequest(owner, repo, number))
+        val issue = execute(api.getIssueApi().issueGetIssue(owner, repo, number))
+        val timeline = execute(api.getIssueApi().issueGetCommentsAndTimeline(owner, repo, number, null, 1, 200, null))
+        val comments = execute(api.getIssueApi().issueGetComments(owner, repo, number, null, null))
+        val commits = execute(api.getRepoApi().repoGetPullRequestCommits(owner, repo, number, 1, 200, true, false))
+        val files = execute(api.getRepoApi().repoGetPullRequestFiles(owner, repo, number, null, null, 1, 300))
+        val reviews = execute(api.getRepoApi().repoListPullReviews(owner, repo, number, 1, 200))
+
+        return GiteaPullRequestFullDetails(
+            pullRequest = pullRequest,
+            issue = issue,
+            timeline = timeline,
+            comments = comments,
+            commits = commits,
+            files = files,
+            reviews = reviews
+        )
+    }
+
+    fun updatePullRequestMetadata(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long,
+        assignees: List<String>,
+        labels: List<Long>,
+        milestoneId: Long?,
+        dueDate: java.util.Date?
+    ): PullRequest {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        val request = EditPullRequestOption().apply {
+            this.assignees = assignees
+            this.labels = labels
+            this.milestone = milestoneId
+            this.dueDate = dueDate
+            this.setUnsetDueDate(dueDate == null)
+        }
+        return execute(api.getRepoApi().repoEditPullRequest(owner, repo, number, request))
+    }
+
+    fun requestReviewers(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long,
+        reviewers: List<String>,
+        teamReviewers: List<String>
+    ) {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        val body = PullReviewRequestOptions().apply {
+            this.reviewers = reviewers
+            this.teamReviewers = teamReviewers
+        }
+        execute(api.getRepoApi().repoCreatePullReviewRequests(body, owner, repo, number))
+    }
+
+    fun clearRequestedReviewers(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long
+    ) {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        val body = PullReviewRequestOptions().apply {
+            this.reviewers = emptyList()
+            this.teamReviewers = emptyList()
+        }
+        executeVoid(api.getRepoApi().repoDeletePullReviewRequests(body, owner, repo, number))
+    }
+
+    fun addPullRequestComment(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long,
+        message: String
+    ): Comment {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        val body = CreateIssueCommentOption().apply {
+            this.body = message
+        }
+        return execute(api.getIssueApi().issueCreateComment(owner, repo, number, body))
+    }
+
+    fun submitReview(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long,
+        event: String,
+        bodyText: String
+    ): PullReview {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        val body = CreatePullReviewOptions().apply {
+            this.body = bodyText
+            this.event = event
+        }
+        return execute(api.getRepoApi().repoCreatePullReview(body, owner, repo, number))
+    }
+
+    fun mergePullRequest(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long,
+        mergeMessage: String?
+    ) {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        val body = MergePullRequestOption().apply {
+            this.setDo(MergePullRequestOption.DoEnum.MERGE)
+            this.mergeMessageField = mergeMessage?.takeIf { it.isNotBlank() }
+            this.setDeleteBranchAfterMerge(false)
+        }
+        executeVoid(api.getRepoApi().repoMergePullRequest(owner, repo, number, body))
+    }
+
     private fun <T> execute(call: Call<T>): T {
         val response = call.execute()
         if (response.isSuccessful) {
@@ -146,6 +280,13 @@ class GiteaPullRequestService(private val project: Project) {
             return null
         }
         throw errorFrom(response)
+    }
+
+    private fun executeVoid(call: Call<Void>) {
+        val response = call.execute()
+        if (!response.isSuccessful) {
+            throw errorFrom(response)
+        }
     }
 
     private fun errorFrom(response: Response<*>): IllegalStateException {
@@ -168,6 +309,16 @@ class GiteaPullRequestService(private val project: Project) {
         }
     }
 }
+
+data class GiteaPullRequestFullDetails(
+    val pullRequest: PullRequest,
+    val issue: Issue,
+    val timeline: List<TimelineComment>,
+    val comments: List<Comment>,
+    val commits: List<Commit>,
+    val files: List<ChangedFile>,
+    val reviews: List<PullReview>
+)
 
 data class GiteaPullRequestRepositoryContext(
     val gitRepository: GitRepository,
