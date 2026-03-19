@@ -2,3 +2,8 @@
 .qodana
 .intellijPlatform
 build
+*.class
+.intellijPlatform/
+.gradle/
+build/
+.idea/
