@@ -69,7 +69,8 @@ class GiteaPullRequestDetailsDialog(
     private val statusLabel = JBLabel()
     private val headerLabel = JBLabel()
     private val subtitleLabel = JBLabel()
-    private val conversationArea = JBTextArea()
+    private val timelineModel = DefaultListModel<TimelineEntry>()
+    private val timelineList = JBList(timelineModel)
     private val reviewsArea = JBTextArea()
     private val commentsEditor = JBTextArea(5, 60)
     private val assigneesField = JBTextField()
@@ -139,10 +140,8 @@ class GiteaPullRequestDetailsDialog(
 
     private fun buildBody(): JComponent {
         val conversationPanel = JPanel(BorderLayout()).apply {
-            conversationArea.isEditable = false
-            conversationArea.lineWrap = true
-            conversationArea.wrapStyleWord = true
-            add(JBScrollPane(conversationArea), BorderLayout.CENTER)
+            timelineList.cellRenderer = TimelineRenderer()
+            add(JBScrollPane(timelineList), BorderLayout.CENTER)
         }
         val commitsPanel = JPanel(BorderLayout()).apply {
             commitsList.cellRenderer = CommitRenderer()
@@ -287,37 +286,64 @@ class GiteaPullRequestDetailsDialog(
             filesList.selectedIndex = 0
         }
 
-        conversationArea.text = buildConversationText(details)
+        populateTimeline(details)
         reviewsArea.text = buildReviewsText(details.reviews)
     }
 
-    private fun buildConversationText(details: GiteaPullRequestFullDetails): String {
+    private fun populateTimeline(details: GiteaPullRequestFullDetails) {
+        val entries = mutableListOf<TimelineEntry>()
         val pr = details.pullRequest
-        val builder = StringBuilder()
-        builder.appendLine("${pr.user?.loginName ?: "-"} opened this pull request")
-        builder.appendLine(pr.body?.takeIf { it.isNotBlank() } ?: GiteaBundle.message("pull.request.details.no.description"))
-        builder.appendLine()
-
-        details.timeline.sortedBy { it.createdAt ?: Date(0) }.forEach { event ->
-            val whenAt = event.createdAt?.let(formatter::format) ?: "-"
-            val who = event.user?.loginName ?: event.assignee?.loginName ?: "-"
-            val type = event.type ?: "event"
-            val body = event.body ?: event.refAction ?: event.newTitle ?: event.newRef ?: ""
-            builder.appendLine("[$whenAt] $who - $type")
-            if (body.isNotBlank()) {
-                builder.appendLine(body)
+        entries += TimelineEntry(
+            createdAt = pr.createdAt,
+            actor = pr.user?.loginName ?: "-",
+            action = "opened this pull request",
+            body = pr.body?.takeIf { it.isNotBlank() } ?: GiteaBundle.message("pull.request.details.no.description")
+        )
+        details.timeline.forEach { event ->
+            val action = buildString {
+                append(event.type ?: "event")
+                event.refAction?.takeIf { it.isNotBlank() }?.let { append(" ($it)") }
             }
-            builder.appendLine()
+            val body = event.body
+                ?: event.newTitle
+                ?: event.newRef
+                ?: event.oldTitle
+                ?: event.refCommitSha
+                ?: event.refIssue?.title
+            entries += TimelineEntry(
+                createdAt = event.createdAt,
+                actor = event.user?.loginName ?: event.assignee?.loginName ?: "-",
+                action = action,
+                body = body
+            )
+        }
+        details.comments.forEach { comment ->
+            entries += TimelineEntry(
+                createdAt = comment.createdAt,
+                actor = comment.user?.loginName ?: "-",
+                action = "commented",
+                body = comment.body
+            )
+        }
+        details.reviews.forEach { review ->
+            entries += TimelineEntry(
+                createdAt = review.updatedAt ?: review.submittedAt,
+                actor = review.user?.loginName ?: review.team?.name ?: "-",
+                action = (review.state ?: "comment").lowercase().replace('_', ' '),
+                body = review.body
+            )
+        }
+        details.commits.forEach { commit ->
+            entries += TimelineEntry(
+                createdAt = commit.created,
+                actor = commit.author?.loginName ?: commit.commit?.author?.name ?: "-",
+                action = "added a commit",
+                body = "${commit.sha?.take(8) ?: "-"} ${commit.commit?.message?.lineSequence()?.firstOrNull().orEmpty()}"
+            )
         }
 
-        details.comments.sortedBy { it.createdAt ?: Date(0) }.forEach { comment ->
-            val whenAt = comment.createdAt?.let(formatter::format) ?: "-"
-            val who = comment.user?.loginName ?: "-"
-            builder.appendLine("[$whenAt] $who commented")
-            builder.appendLine(comment.body ?: "")
-            builder.appendLine()
-        }
-        return builder.toString()
+        timelineModel.clear()
+        entries.sortedBy { it.createdAt ?: Date(0) }.forEach(timelineModel::addElement)
     }
 
     private fun buildReviewsText(reviews: List<PullReview>): String {
@@ -587,6 +613,12 @@ class GiteaPullRequestDetailsDialog(
     }
 
     private data class GitCommandOutput(val exitCode: Int, val output: String)
+    private data class TimelineEntry(
+        val createdAt: Date?,
+        val actor: String,
+        val action: String,
+        val body: String?
+    )
 
     private sealed interface MilestoneOption {
         data object None : MilestoneOption {
@@ -630,6 +662,27 @@ class GiteaPullRequestDetailsDialog(
             append(value.filename.orEmpty(), SimpleTextAttributes.REGULAR_ATTRIBUTES)
             append("  ${value.status.orEmpty()}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
             append("  +${value.additions ?: 0}/-${value.deletions ?: 0}", SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
+        }
+    }
+
+    private inner class TimelineRenderer : ColoredListCellRenderer<TimelineEntry>() {
+        override fun customizeCellRenderer(
+            list: JList<out TimelineEntry>,
+            value: TimelineEntry?,
+            index: Int,
+            selected: Boolean,
+            hasFocus: Boolean
+        ) {
+            if (value == null) return
+            append(value.actor, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES)
+            append(" ${value.createdAt?.let(formatter::format) ?: "-"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            append("\n")
+            append(value.action, SimpleTextAttributes.REGULAR_ATTRIBUTES)
+            value.body?.takeIf { it.isNotBlank() }?.let {
+                append("\n")
+                append(it, SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            }
+            border = JBUI.Borders.empty(8, 8, 8, 8)
         }
     }
 }
