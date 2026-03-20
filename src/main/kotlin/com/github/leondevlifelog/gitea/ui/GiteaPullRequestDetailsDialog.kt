@@ -9,6 +9,7 @@ import com.github.leondevlifelog.gitea.GiteaBundle
 import com.github.leondevlifelog.gitea.services.GiteaPullRequestFullDetails
 import com.github.leondevlifelog.gitea.services.GiteaPullRequestRepositoryContext
 import com.github.leondevlifelog.gitea.services.GiteaPullRequestRepositoryDetails
+import com.github.leondevlifelog.gitea.services.GiteaReviewDraftComment
 import com.github.leondevlifelog.gitea.services.GiteaPullRequestService
 import com.github.leondevlifelog.gitea.services.CachingGiteaUserAvatarLoader
 import com.github.leondevlifelog.gitea.util.GiteaNotifications
@@ -75,6 +76,7 @@ import javax.swing.BoxLayout
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JComponent
+import javax.swing.JComboBox
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JMenuItem
@@ -140,6 +142,12 @@ class GiteaPullRequestDetailsDialog(
     private val commitsList = JBList(commitsModel)
     private val filesModel = DefaultListModel<ChangedFile>()
     private val filesList = JBList(filesModel)
+    private val reviewDraftModel = DefaultListModel<PendingLineComment>()
+    private val reviewDraftList = JBList(reviewDraftModel)
+    private val lineStartField = JBTextField(5)
+    private val lineEndField = JBTextField(5)
+    private val lineCommentEditor = JBTextArea(3, 30)
+    private val lineSideCombo = JComboBox(LineSide.values())
     private val tabs = JBTabbedPane()
     private val diffRequestPanel = DiffManager.getInstance().createRequestPanel(context.gitRepository.project, disposable, null)
     private val diffVersion = AtomicInteger()
@@ -158,6 +166,8 @@ class GiteaPullRequestDetailsDialog(
     private val commentButton = JButton(GiteaBundle.message("pull.request.details.comment"))
     private val approveButton = JButton(GiteaBundle.message("pull.request.details.approve"))
     private val requestChangesButton = JButton(GiteaBundle.message("pull.request.details.request.changes"))
+    private val addLineCommentButton = JButton(GiteaBundle.message("pull.request.details.line.comment.add"))
+    private val removeLineCommentButton = JButton(GiteaBundle.message("pull.request.details.line.comment.remove"))
     private val closeOrReopenButton = JButton()
     private val mergeButton = JButton(GiteaBundle.message("pull.request.details.merge"))
 
@@ -218,8 +228,14 @@ class GiteaPullRequestDetailsDialog(
         }
         val filesPanel = JPanel(BorderLayout()).apply {
             filesList.cellRenderer = FileRenderer()
-            add(JBScrollPane(filesList), BorderLayout.WEST)
-            add(diffRequestPanel.component, BorderLayout.CENTER)
+            add(
+                JPanel(BorderLayout()).apply {
+                    add(JBScrollPane(filesList), BorderLayout.WEST)
+                    add(diffRequestPanel.component, BorderLayout.CENTER)
+                },
+                BorderLayout.CENTER
+            )
+            add(buildReviewDraftPanel(), BorderLayout.SOUTH)
         }
 
         tabs.addTab(GiteaBundle.message("pull.request.details.tab.conversation"), conversationPanel)
@@ -245,6 +261,52 @@ class GiteaPullRequestDetailsDialog(
             firstComponent = left
             secondComponent = right
         }
+    }
+
+    private fun buildReviewDraftPanel(): JComponent {
+        lineCommentEditor.lineWrap = true
+        lineCommentEditor.wrapStyleWord = true
+        reviewDraftList.cellRenderer = PendingLineCommentRenderer()
+        reviewDraftList.visibleRowCount = 4
+        lineSideCombo.selectedItem = LineSide.NEW
+
+        val controls = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            add(JBLabel(GiteaBundle.message("pull.request.details.line.comment.side")))
+            add(Box.createHorizontalStrut(6))
+            add(lineSideCombo)
+            add(Box.createHorizontalStrut(12))
+            add(JBLabel(GiteaBundle.message("pull.request.details.line.comment.start")))
+            add(Box.createHorizontalStrut(6))
+            add(lineStartField)
+            add(Box.createHorizontalStrut(12))
+            add(JBLabel(GiteaBundle.message("pull.request.details.line.comment.end")))
+            add(Box.createHorizontalStrut(6))
+            add(lineEndField)
+            add(Box.createHorizontalStrut(12))
+            add(addLineCommentButton)
+            add(Box.createHorizontalStrut(6))
+            add(removeLineCommentButton)
+            add(Box.createHorizontalGlue())
+        }
+
+        val panel = JPanel(BorderLayout()).apply {
+            border = JBUI.Borders.compound(
+                JBUI.Borders.customLineTop(JBColor.border()),
+                JBUI.Borders.empty(8, 8, 0, 8)
+            )
+            add(controls, BorderLayout.NORTH)
+            add(JBScrollPane(lineCommentEditor), BorderLayout.CENTER)
+            add(
+                JPanel(BorderLayout()).apply {
+                    border = JBUI.Borders.emptyTop(6)
+                    add(JBLabel(GiteaBundle.message("pull.request.details.line.comment.pending")), BorderLayout.NORTH)
+                    add(JBScrollPane(reviewDraftList), BorderLayout.CENTER)
+                },
+                BorderLayout.SOUTH
+            )
+        }
+        return panel
     }
 
     private fun buildMetadataPanel(): JComponent {
@@ -306,6 +368,8 @@ class GiteaPullRequestDetailsDialog(
         openNativeDiffButton.addActionListener { openNativeBranchCompare() }
         saveMetadataButton.addActionListener { saveMetadataAndReviewers() }
         clearReviewersButton.addActionListener { clearReviewers() }
+        addLineCommentButton.addActionListener { addPendingLineComment() }
+        removeLineCommentButton.addActionListener { removeSelectedPendingLineComment() }
         commentButton.addActionListener { submitComment() }
         approveButton.addActionListener { submitReview("APPROVE") }
         requestChangesButton.addActionListener { submitReview("REQUEST_CHANGES") }
@@ -663,6 +727,59 @@ class GiteaPullRequestDetailsDialog(
         )
     }
 
+    private fun addPendingLineComment() {
+        val filePath = filesList.selectedValue?.filename
+        if (filePath.isNullOrBlank()) {
+            GiteaNotifications.showWarning(
+                context.gitRepository.project,
+                null,
+                GiteaBundle.message("pull.request.error.title"),
+                GiteaBundle.message("pull.request.details.line.comment.file.required")
+            )
+            return
+        }
+        val start = lineStartField.text.trim().toIntOrNull()
+        val end = lineEndField.text.trim().toIntOrNull()
+        if (start == null || end == null || start <= 0 || end <= 0 || end < start) {
+            GiteaNotifications.showWarning(
+                context.gitRepository.project,
+                null,
+                GiteaBundle.message("pull.request.error.title"),
+                GiteaBundle.message("pull.request.details.line.comment.range.invalid")
+            )
+            return
+        }
+        if (end - start > 50) {
+            GiteaNotifications.showWarning(
+                context.gitRepository.project,
+                null,
+                GiteaBundle.message("pull.request.error.title"),
+                GiteaBundle.message("pull.request.details.line.comment.range.too.large")
+            )
+            return
+        }
+        val body = lineCommentEditor.text.trim()
+        if (body.isBlank()) {
+            GiteaNotifications.showWarning(
+                context.gitRepository.project,
+                null,
+                GiteaBundle.message("pull.request.error.title"),
+                GiteaBundle.message("pull.request.details.line.comment.body.required")
+            )
+            return
+        }
+        val side = (lineSideCombo.selectedItem as? LineSide) ?: LineSide.NEW
+        reviewDraftModel.addElement(PendingLineComment(filePath, start, end, side, body))
+        lineCommentEditor.text = ""
+    }
+
+    private fun removeSelectedPendingLineComment() {
+        val selectedIndex = reviewDraftList.selectedIndex
+        if (selectedIndex >= 0) {
+            reviewDraftModel.remove(selectedIndex)
+        }
+    }
+
     private fun submitComment() {
         val number = currentPullRequest.number ?: return
         val text = commentsEditor.text.trim()
@@ -680,14 +797,36 @@ class GiteaPullRequestDetailsDialog(
     private fun submitReview(event: String) {
         val number = currentPullRequest.number ?: return
         val text = commentsEditor.text.trim()
+        val pendingDrafts = collectPendingLineComments()
         runBackground(
             GiteaBundle.message("pull.request.details.submitting"),
             onSuccess = {
                 commentsEditor.text = ""
+                reviewDraftModel.clear()
                 refreshDetails()
             },
-            task = { service.submitReview(context, number, event, text) }
+            task = { service.submitReview(context, number, event, text, pendingDrafts) }
         )
+    }
+
+    private fun collectPendingLineComments(): List<GiteaReviewDraftComment> {
+        val result = mutableListOf<GiteaReviewDraftComment>()
+        for (index in 0 until reviewDraftModel.size()) {
+            val draft = reviewDraftModel.get(index)
+            for (line in draft.startLine..draft.endLine) {
+                result += GiteaReviewDraftComment(
+                    path = draft.filePath,
+                    position = line,
+                    side = if (draft.side == LineSide.NEW) {
+                        GiteaReviewDraftComment.Side.NEW
+                    } else {
+                        GiteaReviewDraftComment.Side.OLD
+                    },
+                    body = draft.body
+                )
+            }
+        }
+        return result
     }
 
     private fun mergePullRequest() {
@@ -920,6 +1059,8 @@ class GiteaPullRequestDetailsDialog(
             timelineResolveButton,
             saveMetadataButton,
             clearReviewersButton,
+            addLineCommentButton,
+            removeLineCommentButton,
             commentButton,
             approveButton,
             requestChangesButton,
@@ -933,6 +1074,11 @@ class GiteaPullRequestDetailsDialog(
         milestoneCombo.isEnabled = !busy
         dueDateField.isEnabled = !busy
         commentsEditor.isEnabled = !busy
+        lineCommentEditor.isEnabled = !busy
+        lineStartField.isEnabled = !busy
+        lineEndField.isEnabled = !busy
+        lineSideCombo.isEnabled = !busy
+        reviewDraftList.isEnabled = !busy
         timelineList.isEnabled = !busy
         commitsList.isEnabled = !busy
         filesList.isEnabled = !busy
@@ -1065,6 +1211,21 @@ class GiteaPullRequestDetailsDialog(
         }
     }
 
+    private enum class LineSide {
+        NEW,
+        OLD;
+
+        override fun toString(): String = name.lowercase(Locale.getDefault())
+    }
+
+    private data class PendingLineComment(
+        val filePath: String,
+        val startLine: Int,
+        val endLine: Int,
+        val side: LineSide,
+        val body: String
+    )
+
     private sealed interface MilestoneOption {
         data object None : MilestoneOption {
             override fun toString(): String = GiteaBundle.message("pull.request.form.none")
@@ -1110,6 +1271,28 @@ class GiteaPullRequestDetailsDialog(
         }
     }
 
+    private class PendingLineCommentRenderer : ColoredListCellRenderer<PendingLineComment>() {
+        override fun customizeCellRenderer(
+            list: JList<out PendingLineComment>,
+            value: PendingLineComment?,
+            index: Int,
+            selected: Boolean,
+            hasFocus: Boolean
+        ) {
+            if (value == null) return
+            val lineRange = if (value.startLine == value.endLine) {
+                value.startLine.toString()
+            } else {
+                "${value.startLine}-${value.endLine}"
+            }
+            append("${value.filePath} [${value.side}] L$lineRange", SimpleTextAttributes.REGULAR_ATTRIBUTES)
+            val preview = value.body.lineSequence().firstOrNull().orEmpty()
+            if (preview.isNotBlank()) {
+                append("  $preview", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+            }
+        }
+    }
+
     private inner class TimelineRenderer : ListCellRenderer<TimelineEntry> {
         override fun getListCellRendererComponent(
             list: JList<out TimelineEntry>,
@@ -1147,6 +1330,7 @@ class GiteaPullRequestDetailsDialog(
             val header = JPanel(BorderLayout()).apply {
                 isOpaque = false
                 add(CodeReviewTimelineUIUtil.createTitleTextPane(value.actor, null, value.createdAt), BorderLayout.WEST)
+                alignmentX = Component.LEFT_ALIGNMENT
             }
             createBadgeLabel(value.badge)?.let { header.add(it, BorderLayout.EAST) }
             content.add(header)
@@ -1155,6 +1339,7 @@ class GiteaPullRequestDetailsDialog(
             val summary = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
                 isOpaque = false
+                alignmentX = Component.LEFT_ALIGNMENT
             }
             summary.add(JPanel().apply {
                 preferredSize = JBUI.size(3, 18)
@@ -1204,6 +1389,7 @@ class GiteaPullRequestDetailsDialog(
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             isOpaque = true
             background = entry.kind.cardBackground
+            alignmentX = Component.LEFT_ALIGNMENT
             border = JBUI.Borders.compound(
                 RoundedLineBorder(entry.kind.accentSoft, 10, 1),
                 JBUI.Borders.empty(10, 12)

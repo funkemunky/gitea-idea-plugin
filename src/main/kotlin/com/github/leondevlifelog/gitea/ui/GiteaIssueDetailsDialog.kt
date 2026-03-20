@@ -500,25 +500,23 @@ class GiteaIssueDetailsDialog(
             val row = JPanel(BorderLayout()).apply {
                 isOpaque = true
                 background = list.background
-                border = JBUI.Borders.empty(6, 0)
+                border = JBUI.Borders.empty(4, 0)
             }
 
-            row.add(JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            row.add(JPanel(BorderLayout()).apply {
                 isOpaque = false
                 border = JBUI.Borders.emptyRight(10)
-                add(createAvatarLabel(value.actor, value.avatarUrl))
+                add(createAvatarLabel(value.actor, value.avatarUrl), BorderLayout.NORTH)
             }, BorderLayout.WEST)
 
-            val content = JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            val content = JPanel(BorderLayout()).apply {
                 isOpaque = false
-                border = JBUI.Borders.emptyLeft(12)
             }
 
             val header = JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.X_AXIS)
                 isOpaque = false
+                border = JBUI.Borders.emptyBottom(2)
             }
             header.add(JLabel(value.actor).apply {
                 font = UIUtil.getLabelFont().deriveFont(java.awt.Font.BOLD)
@@ -527,7 +525,7 @@ class GiteaIssueDetailsDialog(
             header.add(Box.createHorizontalStrut(8))
             header.add(JLabel(value.title).apply {
                 foreground = value.kind.accent
-                font = UIUtil.getLabelFont()
+                font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
             })
             value.createdAt?.let { date ->
                 header.add(Box.createHorizontalStrut(8))
@@ -536,23 +534,21 @@ class GiteaIssueDetailsDialog(
                     font = UIUtil.getLabelFont(UIUtil.FontSize.SMALL)
                 })
             }
-            content.add(header)
+            content.add(header, BorderLayout.NORTH)
 
             value.body?.trim()?.takeIf { it.isNotBlank() }?.let { body ->
-                content.add(Box.createVerticalStrut(6))
-                val bodyPanel = JPanel().apply {
-                    layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                val bodyPanel = JPanel(BorderLayout()).apply {
                     isOpaque = true
                     background = value.kind.cardBackground
                     border = JBUI.Borders.compound(
-                        RoundedLineBorder(JBColor.border(), 8, 1),
-                        JBUI.Borders.empty(8, 10)
+                        RoundedLineBorder(JBColor.border(), 6, 1),
+                        JBUI.Borders.empty(4, 8)
                     )
+                    add(JBLabel(UIUtil.toHtml(body.replace("\n", "<br/>"), 0)).apply {
+                        foreground = UIUtil.getLabelForeground()
+                    }, BorderLayout.CENTER)
                 }
-                bodyPanel.add(JBLabel(UIUtil.toHtml(body.replace("\n", "<br/>"), 0)).apply {
-                    foreground = UIUtil.getLabelForeground()
-                })
-                content.add(bodyPanel)
+                content.add(bodyPanel, BorderLayout.CENTER)
             }
             row.add(content, BorderLayout.CENTER)
             return row

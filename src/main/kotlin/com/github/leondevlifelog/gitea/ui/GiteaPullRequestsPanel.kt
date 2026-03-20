@@ -265,7 +265,7 @@ class GiteaPullRequestsPanel(private val project: Project) : JPanel(BorderLayout
             return
         }
 
-        GiteaPullRequestDetailsDialog(
+        GiteaPullRequestReviewDialog(
             context = context,
             repositoryDetails = details,
             initialPullRequest = pullRequest,

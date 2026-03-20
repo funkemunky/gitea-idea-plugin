@@ -23,6 +23,7 @@ import org.gitnex.tea4j.v2.models.ChangedFile
 import org.gitnex.tea4j.v2.models.Comment
 import org.gitnex.tea4j.v2.models.Commit
 import org.gitnex.tea4j.v2.models.CreatePullRequestOption
+import org.gitnex.tea4j.v2.models.CreatePullReviewComment
 import org.gitnex.tea4j.v2.models.CreatePullReviewOptions
 import org.gitnex.tea4j.v2.models.EditPullRequestOption
 import org.gitnex.tea4j.v2.models.Issue
@@ -244,12 +245,37 @@ class GiteaPullRequestService(private val project: Project) {
         event: String,
         bodyText: String
     ): PullReview {
+        return submitReview(context, number, event, bodyText, emptyList())
+    }
+
+    fun submitReview(
+        context: GiteaPullRequestRepositoryContext,
+        number: Long,
+        event: String,
+        bodyText: String,
+        lineComments: List<GiteaReviewDraftComment>
+    ): PullReview {
         val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
         val owner = context.coordinates.repositoryPath.owner
         val repo = context.coordinates.repositoryPath.repository
         val body = CreatePullReviewOptions().apply {
             this.body = bodyText
             this.event = event
+            if (lineComments.isNotEmpty()) {
+                this.comments = lineComments.map { draft ->
+                    CreatePullReviewComment().apply {
+                        this.body = draft.body
+                        this.path = draft.path
+                        if (draft.side == GiteaReviewDraftComment.Side.NEW) {
+                            this.newPosition = draft.position.toLong()
+                            this.oldPosition = 0L
+                        } else {
+                            this.oldPosition = draft.position.toLong()
+                            this.newPosition = 0L
+                        }
+                    }
+                }
+            }
         }
         return execute(api.getRepoApi().repoCreatePullReview(body, owner, repo, number))
     }
@@ -375,4 +401,16 @@ data class GiteaPullRequestRepositoryDetails(
 ) {
     val branchNames: List<String>
         get() = branches.mapNotNull { it.name }.distinct().sorted()
+}
+
+data class GiteaReviewDraftComment(
+    val path: String,
+    val position: Int,
+    val side: Side,
+    val body: String
+) {
+    enum class Side {
+        NEW,
+        OLD
+    }
 }
