@@ -31,6 +31,7 @@ import org.gitnex.tea4j.v2.models.MergePullRequestOption
 import org.gitnex.tea4j.v2.models.Milestone
 import org.gitnex.tea4j.v2.models.PullRequest
 import org.gitnex.tea4j.v2.models.PullReview
+import org.gitnex.tea4j.v2.models.PullReviewComment
 import org.gitnex.tea4j.v2.models.PullReviewRequestOptions
 import org.gitnex.tea4j.v2.models.Repository
 import org.gitnex.tea4j.v2.models.Team
@@ -154,6 +155,11 @@ class GiteaPullRequestService(private val project: Project) {
         val commits = execute(api.getRepoApi().repoGetPullRequestCommits(owner, repo, number, 1, 200, true, false))
         val files = execute(api.getRepoApi().repoGetPullRequestFiles(owner, repo, number, null, null, 1, 300))
         val reviews = execute(api.getRepoApi().repoListPullReviews(owner, repo, number, 1, 200))
+        val reviewComments = reviews
+            .mapNotNull { review -> review.id?.let { it to review } }
+            .flatMap { (reviewId, _) ->
+                execute(api.getRepoApi().repoGetPullReviewComments(owner, repo, number, reviewId))
+            }
 
         return GiteaPullRequestFullDetails(
             pullRequest = pullRequest,
@@ -162,7 +168,8 @@ class GiteaPullRequestService(private val project: Project) {
             comments = comments,
             commits = commits,
             files = files,
-            reviews = reviews
+            reviews = reviews,
+            reviewComments = reviewComments
         )
     }
 
@@ -263,6 +270,26 @@ class GiteaPullRequestService(private val project: Project) {
         executeVoid(api.getRepoApi().repoMergePullRequest(owner, repo, number, body))
     }
 
+    fun resolveReviewComment(
+        context: GiteaPullRequestRepositoryContext,
+        commentId: Long
+    ) {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        executeVoid(api.getRepoApi().repoResolvePullReviewComment(owner, repo, commentId))
+    }
+
+    fun unresolveReviewComment(
+        context: GiteaPullRequestRepositoryContext,
+        commentId: Long
+    ) {
+        val api = GiteaSettings.getInstance().getGiteaApi(context.account.server.toString(), context.token)
+        val owner = context.coordinates.repositoryPath.owner
+        val repo = context.coordinates.repositoryPath.repository
+        executeVoid(api.getRepoApi().repoUnresolvePullReviewComment(owner, repo, commentId))
+    }
+
     private fun <T> execute(call: Call<T>): T {
         val response = call.execute()
         if (response.isSuccessful) {
@@ -317,7 +344,8 @@ data class GiteaPullRequestFullDetails(
     val comments: List<Comment>,
     val commits: List<Commit>,
     val files: List<ChangedFile>,
-    val reviews: List<PullReview>
+    val reviews: List<PullReview>,
+    val reviewComments: List<PullReviewComment>
 )
 
 data class GiteaPullRequestRepositoryContext(
