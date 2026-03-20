@@ -10,3 +10,4 @@ build/*
 tea4j-autodeploy/build/
 tea4j-autodeploy/.gradle/
 tea4j-autodeploy/.idea
+/.intellij-github-ref/*
