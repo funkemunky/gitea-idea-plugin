@@ -7,3 +7,6 @@ build
 .gradle/*
 build/*
 .idea/*
+tea4j-autodeploy/build/
+tea4j-autodeploy/.gradle/
+tea4j-autodeploy/.idea
