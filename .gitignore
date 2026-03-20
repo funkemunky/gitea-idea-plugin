@@ -1,8 +1,9 @@
 .gradle
 .qodana
 .intellijPlatform
-build
-.idea
-tea4j-autodeploy/build/*
+build/
+.idea/
+tea4j-autodeploy/build/
+tea4j-autodeploy/.idea
 tea4j-autodeploy/.gradle
 *.iml

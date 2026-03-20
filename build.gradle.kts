@@ -22,7 +22,7 @@ kotlin {
 // Configure project's dependencies
 repositories {
     maven {
-       url = uri("https://nexus.funkemunky.cc/repository/maven-central/")
+        url = uri("https://nexus.funkemunky.cc/repository/maven-central/")
     }
     maven {
         url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
