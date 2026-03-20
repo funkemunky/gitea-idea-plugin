@@ -244,7 +244,7 @@ class GiteaIssueDetailsDialog(
             )
         )
 
-        for (item in details.timeline.sortedBy { it.created }) {
+        for (item in details.timeline.sortedBy { it.createdAt }) {
             val entry = timelineCommentToEntry(item) ?: continue
             entries.add(entry)
         }
@@ -258,7 +258,7 @@ class GiteaIssueDetailsDialog(
         val avatarUrl = item.user?.avatarUrl
         return when (item.type) {
             "comment" -> TimelineEntry(
-                createdAt = item.created,
+                createdAt = item.createdAt,
                 actor = actor,
                 title = GiteaBundle.message("issue.timeline.comment"),
                 body = item.body?.takeIf { it.isNotBlank() },
@@ -266,7 +266,7 @@ class GiteaIssueDetailsDialog(
                 avatarUrl = avatarUrl
             )
             "close" -> TimelineEntry(
-                createdAt = item.created,
+                createdAt = item.createdAt,
                 actor = actor,
                 title = GiteaBundle.message("issue.timeline.closed"),
                 body = null,
@@ -274,7 +274,7 @@ class GiteaIssueDetailsDialog(
                 avatarUrl = avatarUrl
             )
             "reopen" -> TimelineEntry(
-                createdAt = item.created,
+                createdAt = item.createdAt,
                 actor = actor,
                 title = GiteaBundle.message("issue.timeline.reopened"),
                 body = null,
@@ -282,7 +282,7 @@ class GiteaIssueDetailsDialog(
                 avatarUrl = avatarUrl
             )
             "label", "unlabel" -> TimelineEntry(
-                createdAt = item.created,
+                createdAt = item.createdAt,
                 actor = actor,
                 title = if (item.type == "label") {
                     GiteaBundle.message("issue.timeline.labeled")
@@ -294,7 +294,7 @@ class GiteaIssueDetailsDialog(
                 avatarUrl = avatarUrl
             )
             "milestone" -> TimelineEntry(
-                createdAt = item.created,
+                createdAt = item.createdAt,
                 actor = actor,
                 title = GiteaBundle.message("issue.timeline.milestone"),
                 body = item.milestone?.title,
@@ -302,7 +302,7 @@ class GiteaIssueDetailsDialog(
                 avatarUrl = avatarUrl
             )
             "assignees" -> TimelineEntry(
-                createdAt = item.created,
+                createdAt = item.createdAt,
                 actor = actor,
                 title = GiteaBundle.message("issue.timeline.assignee.changed"),
                 body = null,
@@ -311,7 +311,7 @@ class GiteaIssueDetailsDialog(
             )
             else -> if (!item.body.isNullOrBlank()) {
                 TimelineEntry(
-                    createdAt = item.created,
+                    createdAt = item.createdAt,
                     actor = actor,
                     title = item.type ?: "event",
                     body = item.body,
