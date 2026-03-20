@@ -17,11 +17,13 @@ import com.intellij.ui.dsl.builder.panel
 class GiteaToolWindowFactory : ToolWindowFactory {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val prContent =
-            ContentFactory.getInstance().createContent(GiteaPullRequestsPanel(project), GiteaBundle.message("pr"), false)
+        val prPanel = GiteaPullRequestsPanel(project)
+        val prContent = ContentFactory.getInstance().createContent(prPanel, GiteaBundle.message("pr"), false)
         toolWindow.contentManager.addContent(prContent)
+
+        val issuePanel = GiteaIssuesPanel(project)
         val issueContent = ContentFactory.getInstance()
-            .createContent(GiteaToolWindow.issuePlaceholderContent(), GiteaBundle.message("issue"), false)
+            .createContent(issuePanel, GiteaBundle.message("issue"), false)
         toolWindow.contentManager.addContent(issueContent)
     }
 

@@ -46,4 +46,21 @@ New feature coming soon:
         <listener class="com.github.leondevlifelog.gitea.listeners.GiteaActivationListener"
             topic="com.intellij.openapi.application.ApplicationActivationListener" />
     </applicationListeners>
+
+    <actions>
+        <group id="Gitea.MainGroup" popup="true" text="Gitea">
+            <reference ref="Gitea.OpenInBrowser" />
+            <reference ref="Gitea.CopyLink" />
+            <add-to-group group-id="Git.Menu" anchor="last" />
+            <add-to-group group-id="EditorPopupMenu" anchor="last" />
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last" />
+        </group>
+
+        <action id="Gitea.OpenInBrowser" class="com.github.leondevlifelog.gitea.actions.GiteaOpenInBrowserAction"
+            text="Open on Gitea" description="Open selected file in browser on Gitea">
+        </action>
+        <action id="Gitea.CopyLink" class="com.github.leondevlifelog.gitea.actions.GiteaCopyLinkAction"
+            text="Copy Gitea Link" description="Copy link to selected file on Gitea">
+        </action>
+    </actions>
 </idea-plugin>
