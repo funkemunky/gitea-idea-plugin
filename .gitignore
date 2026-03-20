@@ -4,6 +4,6 @@
 build
 *.class
 .intellijPlatform/
-.gradle/
-build/
-.idea/
+.gradle/*
+build/*
+.idea/*
